@@ -1,0 +1,522 @@
+#!/bin/bash
+
+echo -e "\nThis script will process a raw vcf file, usually 'TotalRawSNPs.vcf' from dDocent,"
+echo "filter by specified quality cutoff, depth cutoff, and invariance, and then iteratively"
+echo "increase missing data cutoffs within individuals and loci to specified values."
+echo -e "Filtering results are printed to a file called 'Prefix_filter_TRS_log.txt'.\n" 
+echo "The script will then filter the resulting file (now free of low call rate loci/individuals) "
+echo -e "and filter artifactual/paralogous loci using routines from J.Puritz's 'dDocent_filters' script (with modifications). \n"
+
+
+if [ -z "$6" ]
+then
+	echo "Not enough values specified."
+	echo "Correct usage: filter_TRS_filters.sh inputVCF output-prefix minQ-value minDP-value mind-value geno-value [optional: is-mixture?(yes/no) remove-SNPs-only(yes/no) depth-limit]"
+	exit 1
+elif [ $3 -lt 1 ] 
+then 
+	echo "'minQ' value must be greater than 1"
+	exit 1 
+elif [ $4 -lt 1 ] 
+then 
+	echo "'minDP' value must be greater than 1"
+	exit 1
+else
+	#convert mind value to integer for "-ge" check
+	mindint=`echo "scale=0; $5*100" | bc | sed 's/\.[0-9]*//g'`
+	#convert geno value to integer for "-ge" check
+	genoint=`echo "scale=0; $6*100" | bc | sed 's/\.[0-9]*//g'`
+fi
+
+if [ "$mindint" -ge 100 ] 
+then 
+	echo "'mind' value must be less than 1"
+	exit 1
+elif [ "$genoint" -ge 100 ] 
+then 
+	echo "'geno' value must be less than 1"
+	exit 1
+else 
+	echo "input VCF: "$1
+	echo "output-prefix: "$2
+	echo "minQ value: "$3
+	echo "minDP value:" $4
+	echo "mind-value: "$5
+	echo "geno-value: "$6
+	#echo $mindint
+
+prefix=$2
+minq=$3
+mindp=$4
+mind=$5
+geno=$6
+
+echo -e "\nNow filtering by locus quality and genotype depth, and removing any invariant loci"
+vcftools --recode-INFO-all --vcf $1 --minQ $minq --minDP $mindp --maf 0.000001 --recode --out filterMQDP > filter_log.txt
+echo "Now filtering by locus quality and genotype depth, and removing any invariant loci" > "$prefix"_filter_TRS_log.txt
+grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+
+##filter first by geno 0.1, then proceed to filtering by mind and geno, otherwise just filter once by both
+echo "Now filtering individuals and loci by missing data"
+
+if [ "$genoint" -ge 10 ]
+	then
+	echo "Now filtering loci by missing data" >> "$prefix"_filter_TRS_log.txt
+	vcftools --recode-INFO-all --vcf filterMQDP.recode.vcf --geno 0.1  --maf 0.000001 --recode --out filterGN1 > filter_log.txt
+	grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+else
+	echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
+	vcftools --recode-INFO-all --vcf filterMQDP.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix > filter_log.txt
+	grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+	rm filter_log.txt
+	rm filterMQDP.*
+	exit
+fi
+
+##filter by one "step" up in mind and geno, otherwise just filter once more by both
+if [ "$genoint" -ge 30 ]
+then
+	if [ "$mindint" -gt 5 ]
+	then
+		echo "Now filtering individuals and loci by missing data" >> "$prefix"_filter_TRS_log.txt
+		vcftools --recode-INFO-all --vcf filterGN1.recode.vcf --mind 0.05 --geno 0.3  --maf 0.000001 --recode --out filterMND05GN3 > filter_log.txt
+		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+	else
+		echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
+		vcftools --recode-INFO-all --vcf filterGN1.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+	fi
+else
+	echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
+	vcftools --recode-INFO-all --vcf filterGN1.recode.vcf --mind $mind  --maf 0.000001 --geno $geno --recode --out temp > filter_log.txt
+	vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind  --maf 0.000001 --geno $geno --recode --out $prefix >> filter_log.txt
+	grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+	rm temp.recode.vcf
+	rm filter_log.txt
+	rm filterMQDP.*
+	rm filterGN1.*
+	exit
+fi
+
+##filter by one "step" up in mind and geno, otherwise just filter once more by both
+if [ "$genoint" -ge 50 ]
+then
+	if [ "$mindint" -ge 30 ]
+	then
+		echo "Now filtering individuals and loci by missing data" >> "$prefix"_filter_TRS_log.txt
+		vcftools --recode-INFO-all --vcf filterMND05GN3.recode.vcf --mind 0.3 --geno 0.5  --maf 0.000001 --recode --out filterMND3GN5 > filter_log.txt
+		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+	else
+		echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
+		vcftools --recode-INFO-all --vcf filterMND05GN3.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+		rm temp.*
+		rm filter_log.txt
+		rm filterMQDP.*
+		rm filterGN1.*
+		rm filterMND05GN3.*
+	fi
+else
+	echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
+	vcftools --recode-INFO-all --vcf filterMND05GN3.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+	vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+	grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+	rm temp.*
+	rm filter_log.txt
+	rm filterMQDP.*
+	rm filterGN1.*
+	rm filterMND05GN3.*
+	exit
+fi
+
+##filter by one "step" up in mind and geno, otherwise/then filter by final (specified) values
+if [ "$genoint" -ge 70 ]
+then
+	if [ "$mindint" -ge 50 ]
+	then
+		echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
+		vcftools --recode-INFO-all --vcf filterMND3GN5.recode.vcf --mind 0.5 --geno 0.7  --maf 0.000001 --recode --out filterMND5GN7 > filter_log.txt
+		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+		vcftools --recode-INFO-all --vcf filterMND5GN7.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+		rm temp.*
+		rm filter_log.txt
+		rm filterMQDP.*
+		rm filterGN1.*
+		rm filterMND05GN3.*
+		rm filterMND3GN5.*
+		rm filterMND5GN7.*
+		exit
+	else
+		echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
+		vcftools --recode-INFO-all --vcf filterMND3GN5.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+		rm temp.*
+		rm filter_log.txt
+		rm filterMQDP.*
+		rm filterGN1.*
+		rm filterMND05GN3.*
+		rm filterMND3GN5.*
+	fi
+else
+	echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
+	vcftools --recode-INFO-all --vcf filterMND3GN5.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+	vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+	grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
+	rm temp.*
+	rm filter_log.txt
+	rm filterMQDP.*
+	rm filterGN1.*
+	rm filterMND05GN3.*
+	rm filterMND3GN5.*
+fi
+fi
+
+###report current number of loci and individuals
+IND=$(mawk '/#/' $prefix.recode.vcf | tail -1 | wc -w)
+IND=$(($IND - 9))
+LOC=$(mawk '!/#/' $prefix.recode.vcf | wc -l)
+echo -e "\nBefore further filtering, the number of loci is "$LOC" and the number of individuals is "$IND"\n"
+
+
+echo "This script will now filter the filtered VCF file using criteria related to site depth," 
+echo "quality versus depth, strand representation, allelic balance at heterzygous individuals, and paired read representation."
+echo -e "The script assumes that loci and individuals with low call rates (or depth) have already been removed. \n"
+
+#Filteres out sites that on average have heterzygotes with less than a 0.28 allele balance between reads from each allele and Quality / Depth < 0.5 and ratio of mapping quality for reference and alternate alleles
+
+vcffilter -s -f "AB > 0.2 & AB < 0.8 | AB < 0.01 | AB > 0.99" -s -g "QR > 0 | QA > 0 " $prefix.recode.vcf | vcffilter -s -f "QUAL / DP > 0.2" | vcffilter -s -f "MQM / MQMR > 0.25 & MQM / MQMR < 1.75" > $prefix.ab.vcf
+FILTERED=$(mawk '!/#/' $prefix.ab.vcf | wc -l)
+OLD=$(mawk '!/#/' $prefix.recode.vcf | wc -l)
+NUMFIL=$(($OLD - $FILTERED))
+echo -e "Number of sites filtered based on allele balance at heterozygous loci, locus quality, and mapping quality / Depth\n" $NUMFIL "of" $OLD "\n"
+echo -e "Number of sites filtered based on allele balance at heterozygous loci, locus quality, and mapping quality / Depth\n" $NUMFIL "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+
+#Filters out loci that have reads from both strands, with some leeway for a bad individual or two
+
+vcffilter -f "SAF / SAR > 100 & SRF / SRR > 100 | SAR / SAF > 100 & SRR / SRF > 50" -s $prefix.ab.vcf > $prefix.filAB.vcf
+FILTERED=$(mawk '!/#/' $prefix.filAB.vcf | wc -l)
+OLD=$(mawk '!/#/' $prefix.ab.vcf | wc -l)
+NUMFIL=$(($OLD - $FILTERED))
+echo -e "Number of additional sites filtered based on overlapping forward and reverse reads\n" $NUMFIL "of" $OLD "\n"
+echo -e "Number of additional sites filtered based on overlapping forward and reverse reads\n" $NUMFIL "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+
+#Filters out loci that have reads from both paired and unpaired reads
+
+if [[ -z "$7" ]]; then
+	#echo -e "Is this from a mixture of SE and PE libraries? Enter yes or no."
+	PE=no
+else
+	PE=$7
+fi
+
+if [ "$PE" != "yes" ]; then
+	vcffilter -f "PAIRED > 0.05 & PAIREDR > 0.05 & PAIREDR / PAIRED < 1.75 & PAIREDR / PAIRED > 0.25 | PAIRED < 0.05 & PAIREDR < 0.05" -s $prefix.filAB.vcf > $prefix.fil.vcf
+	FILTERED=$(mawk '!/#/' $prefix.fil.vcf  | wc -l)
+	OLD=$(mawk '!/#/' $prefix.filAB.vcf | wc -l)
+	NUMFIL=$(($OLD - $FILTERED))
+	echo -e "Number of additional sites filtered based on properly paired status\n" $NUMFIL "of" $OLD "\n"
+	echo -e "Number of additional sites filtered based on properly paired status\n" $NUMFIL "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+else
+	vcffilter -f "PAIRED < 0.005 & PAIREDR > 0.005 | PAIRED > 0.005 & PAIREDR < 0.005" -t NP -F PASS -A $prefix.filAB.vcf | mawk '!/NP/' > $prefix.fil.vcf
+	FILTERED=$(mawk '!/#/' $prefix.fil.vcf  | wc -l)
+	OLD=$(mawk '!/#/' $prefix.filAB.vcf | wc -l)
+	NUMFIL=$(($OLD - $FILTERED))
+	echo -e "Number of additional sites filtered based on properly paired status\n" $NUMFIL "of" $OLD "\n"
+	echo -e "Number of additional sites filtered based on properly paired status\n" $NUMFIL "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+fi
+
+#Uses the VCF file to estimate the original number of individuals in the VCF file
+#This is important because the INFO flags are based on this number
+#IND=$(grep -o -e 'NS=[0-9]*' $1 | sed s/NS=//g | sort | tail -1)
+#IND=$(($IND - 0 ))
+
+#Creates a file with the original site depth and qual for each locus
+cut -f8 $prefix.recode.vcf | grep -oe "DP=[0-9]*" | sed -s 's/DP=//g' > $prefix.DEPTH
+mawk '!/#/' $prefix.recode.vcf | cut -f1,2,6 > $prefix.loci.qual
+
+#Calculates the average depth and standard deviation
+DEPTH=$(mawk '{ sum += $1; n++ } END { if (n > 0) print sum / n; }' $prefix.DEPTH)
+SD=$(mawk '{delta = $1 - avg; avg += delta / NR; mean2 += delta * ($1 - avg); } END { print sqrt(mean2 / NR); }' $prefix.DEPTH)
+DEPTH=$(python -c "print int("$DEPTH") + int("$SD")")
+#DEPTH=$(python -c "print int("$DEPTH"+100*("$DEPTH"**0.5))")
+
+#Filters loci above the mean depth + 1 standard deviation that have quality scores that are less than 2*DEPTH
+paste $prefix.loci.qual $prefix.DEPTH | mawk -v x=$DEPTH '$4 > x'| mawk '$3 < 2 * $4' > $prefix.lowQDloci
+LQDL=$(cat $prefix.lowQDloci | wc -l)
+OLD=$(mawk '!/#/' $prefix.fil.vcf | wc -l)
+echo -e "Number of sites filtered based on high depth and lower than 2*DEPTH quality score\n" $LQDL "of" $OLD "\n"  
+echo -e "Number of sites filtered based on high depth and lower than 2*DEPTH quality score\n" $LQDL "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+
+
+#Recalculates site depth for sites that have not been previously filtered
+vcftools --vcf $prefix.fil.vcf --remove-filtered NP --exclude-positions $prefix.lowQDloci --site-depth --out $prefix > /dev/null
+cut -f3 $prefix.ldepth > $prefix.site.depth
+
+#Calculates actual number of individuals in VCF file
+#This is important because loci will now be filtered by mean depth calculated with individuals present in VCF
+IND=$(mawk '/#/' $prefix.fil.vcf | tail -1 | wc -w)
+IND=$(($IND - 9))
+
+######
+#Calculate the number of non-missing individuals per SNP 
+#(not currently accurate b/c one would need to calculate depth directly for non-missing individuals since DP=# never gets updated for missing individuals)
+#rm ind_count.txt
+#grep "dDocent_Contig" testshort2.vcf > contigsonly.txt
+#mapfile -t DATA < contigsonly.txt
+#LEN=( `wc -l contigsonly.txt `)
+#LEN=$(($LEN - 1))
+#for ((i = 0; i <= $LEN; i++));
+#do
+#echo ${DATA[$i]} > tempfile.txt
+#MISS=$(grep -o "\.\/\." tempfile.txt | wc -l )
+#NMIND=$(($IND - $MISS )) 
+#echo $NMIND >> ind_count.txt
+#done
+#rm tempfile.txt
+#rm contigsonly.txt
+######
+
+#make file of depth averaged across individuals for use with --max-meanDP command in VCFtools
+mawk '!/D/' $prefix.site.depth | mawk -v x=$IND '{print $1/x}' > meandepthpersite
+
+##frequency plot of meanDP
+gnuplot << \EOF >> "$prefix"_filter_TRS_log.txt
+set terminal dumb size 120, 30
+set autoscale
+set xrange [10:150] 
+unset label
+set title "Histogram of mean depth per site"
+set ylabel "Number of Occurrences"
+set xlabel "Mean Depth"
+#set yr [0:100000]
+binwidth=1
+bin(x,width)=width*floor(x/width) + binwidth/2.0
+set xtics 5
+plot 'meandepthpersite' using (bin($1,binwidth)):(1.0) smooth freq with boxes
+pause -1
+EOF
+
+gnuplot << \EOF 
+set terminal dumb size 120, 30
+set autoscale
+set xrange [10:150] 
+unset label
+set title "Histogram of mean depth per site"
+set ylabel "Number of Occurrences"
+set xlabel "Mean Depth"
+#set yr [0:100000]
+binwidth=1
+bin(x,width)=width*floor(x/width) + binwidth/2.0
+set xtics 5
+plot 'meandepthpersite' using (bin($1,binwidth)):(1.0) smooth freq with boxes
+pause -1
+EOF
+
+
+#Calculates the 95th percentile of mean depth cutoff to use for filtering
+#PP=$(mawk '!/SUM/' $prefix.site.depth | sort -rn | perl -e '$d=.05;@l=<>;print $l[int($d*$#l)]' )
+#PP=$(python -c "print int($PP / $IND)")
+
+
+
+if [[ -z "$9" ]]; then
+	#echo "If distrubtion looks normal, a 1.645 sigma cutoff (~90% of the data) would be" $DP
+	#echo "The 95% cutoff would be" $PP
+	#echo "Would you like to use a different maximum mean depth cutoff than "$PP", yes or no"
+	
+	##rounding meandepthpersite to integers to calculate mode
+	MINDP=$(cut -f1 meandepthpersite | sort -n | head -n 1)
+	MINDP=$(printf "%.0f" $MINDP)
+	
+	##round to nearest integer (very slow)
+	#LEN=( `wc -l meandepthpersite` )
+	#LEN=$(($LEN - 1))
+	#MEANDP=( `cut -f1 meandepthpersite` )
+	#rm meandepthpersiteint
+	#for ((i = 0; i <= $LEN; i++));
+	#do
+	#float=${MEANDP[$i]}
+	#echo "($float+0.5)/1" | bc >> meandepthpersiteint
+	#done
+	
+	##round down by truncating decimal
+	rm meandepthpersiteint
+	cat meandepthpersite | sed 's/\.[0-9]*//g' > meandepthpersiteint
+	MODEDP=$(cut -f1 meandepthpersiteint | sort | uniq -c | sort -rn | head -n 1 | tr -s " " | cut -f3 -d" ")
+	
+	PP=$(($MODEDP+$MODEDP-$MINDP))
+	
+	echo -e "Using 2*mode-min as maximum mean depth cutoff:" $PP >> "$prefix"_filter_TRS_log.txt
+	echo -e "Using 2*mode-min as maximum mean depth cutoff:" $PP
+else
+	PP=$9
+	echo -e "Using maximum mean depth cutoff given by the user:" $PP >> "$prefix"_filter_TRS_log.txt
+	echo -e "Using maximum mean depth cutoff given by the user:" $PP
+fi
+
+###create if then else for removing all SNPs from depth-too-high contigs or only the SNPs themselves
+
+if [[ -z "$8" ]]; then
+	echo -e "Shall I remove only individual SNPs above the depth limit? (otherwise I remove the whole contig)"
+	read ALL
+else
+	ALL=$8
+fi
+
+if [ "$ALL" = "yes" ]; then
+	echo -e "Removing only SNPs below\n" $PP >> "$prefix"_filter_TRS_log.txt
+	echo -e "Removing only SNPs below\n" $PP
+
+
+	#applying max mean depth cutoffs using VCFtools
+	vcftools --vcf $prefix.fil.vcf --remove-filtered NP --recode-INFO-all --out $prefix.FILA --max-meanDP $PP --exclude-positions $prefix.lowQDloci --recode > /dev/null
+	FILTERED=$(mawk '!/#/' $prefix.FILA.recode.vcf  | wc -l)
+	OLD=$(mawk '!/#/' $prefix.fil.vcf | wc -l)
+	NUMFIL=$(($OLD - $FILTERED))
+	echo -e "Number of sites filtered based on maximum mean depth\n" $NUMFIL "of" $OLD "\n"
+	echo -e "Number of sites filtered based on maximum mean depth\n" $NUMFIL "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+
+	#filtering sites base on within locus depth mismatch
+	vcftools --vcf $prefix.fil.vcf --remove-filtered NP --recode-INFO-all --out $prefix.FIL1 --max-meanDP $PP --exclude-positions $prefix.lowQDloci --recode --site-depth > /dev/null
+	mawk '!/CHR/' $prefix.FIL1.ldepth | mawk '{
+	if (NR == 1) {chrom=$1;i=1;pos[i]=$2;dp[i]=$3}
+	else if ($1 == chrom) {i++;pos[i]=$2;dp[i]=$3}
+	else if ($1 != chrom) {for (x in dp) dpp= dpp + dp[x]; adp=dpp / i; adp= adp / 10 * 6; for (j = 1; j <= i; j++) if (dp[j] < adp) print chrom"\t"pos[j];chrom=$1;i=1;delete pos;pos[i]=$2;delete dp;dpp=0;dp[i]=$3}
+	}' > $prefix.dpmismatch.loci
+
+	OLD=$(mawk '!/#/' $prefix.FIL1.recode.vcf | wc -l)
+	DPMM=$(cat $prefix.dpmismatch.loci | wc -l)
+	echo -e "Number of sites filtered based on within locus depth mismatch\n" $DPMM "of" $OLD "\n"
+	echo -e "Number of sites filtered based on within locus depth mismatch\n" $DPMM "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+
+	#Combines all filters to create a final filtered VCF file
+	vcftools --vcf $prefix.FIL1.recode.vcf --exclude-positions $prefix.dpmismatch.loci --recode --recode-INFO-all --out $prefix.FIL > /dev/null
+
+	OLD=$(mawk '!/#/' $prefix.recode.vcf | wc -l)
+	FILTERED=$(mawk '!/#/' $prefix.FIL.recode.vcf  | wc -l)
+	NUMFIL=$(($OLD - $FILTERED))
+
+	echo -e "Total number of sites filtered\n" $NUMFIL "of" $OLD "\n"
+	echo -e "Total number of sites filtered\n" $NUMFIL "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+
+	echo -e "Remaining sites\n" $FILTERED "\n"
+	echo -e "Remaining sites\n" $FILTERED "\n" >> "$prefix"_filter_TRS_log.txt
+
+else
+
+	echo -e "Removing entire contigs with any SNP below\n" $PP >> "$prefix"_filter_TRS_log.txt
+	echo -e "Removing entire contigs with any SNP below\n" $PP
+
+	##find contigs with any snps with mean depth above limit
+	#CONTDP=( `paste <(cut -f1 meandepthpersite) <(grep -v "CHRO" $prefix.ldepth | cut -f1)` )
+	
+	LEN=( `wc -l meandepthpersite` )
+	LEN=$(($LEN - 1))
+	#rm meandepthpersiteint
+	rm remove_depth_contigs.txt
+	MEANDP=( `cut -f1 meandepthpersite` )
+	CONT=( `grep -v "CHRO" $prefix.ldepth | cut -f1` )
+	PPLIM=`echo "scale=0; $PP*100" | bc | sed 's/\.[0-9]*//g'`
+	for ((i = 0; i <= $LEN; i++));
+		do
+		depth=${MEANDP[$i]}
+		contig=${CONT[$i]}
+	##multiply by 100, get rid of extra decimals with sed, ask if $depth is larger than PP*100
+		CONTDP=`echo $depth | awk '{print $1*100}' | sed 's/\.[0-9]*//g'`
+	#	CONTDP=`echo $depth | awk '{print $1*100}'`
+			##if $depth is greater than $PP, add $contig to array
+	#echo "$PPLIM	$contig	$depth	$CONTDP"
+			if [[ $CONTDP -gt $PPLIM ]]
+			then
+	#		echo "REMOVE"
+			echo $contig >> remove_depth_contigs.txt
+			fi
+	done
+	
+	#find all positions in contigs with depth greater than limit (in remove_contigs.txt)
+	CONTIGS=( `cut -f1  remove_depth_contigs.txt | sort | uniq `)
+	LENX=( `cut -f1  remove_depth_contigs.txt | sort | uniq | wc -l `)
+	LENX=$(($LENX - 1))
+	
+	#echo $1
+	#echo $2
+	#echo ${CONTIGS[0]}
+	
+	rm remove_depth_contigs_positions.txt
+	for ((i = 0; i <= $LENX; i++));
+	do
+	grep -P "${CONTIGS[$i]}\t" $prefix.ldepth | cut -f 1-2 >> remove_depth_contigs_positions.txt
+	done
+
+	cat remove_depth_contigs_positions.txt <(cut -f1-2 $prefix.lowQDloci) > remove_depth_qual.txt
+	
+	#applying max mean depth cutoffs using VCFtools
+	vcftools --vcf $prefix.fil.vcf --remove-filtered NP --recode-INFO-all --out $prefix.FILA --exclude-positions remove_depth_qual.txt --recode > /dev/null
+	FILTERED=$(mawk '!/#/' $prefix.FILA.recode.vcf  | wc -l)
+	OLD=$(mawk '!/#/' $prefix.fil.vcf | wc -l)
+	NUMFIL=$(($OLD - $FILTERED))
+	echo -e "Number of sites filtered based on maximum mean depth\n" $NUMFIL "of" $OLD "\n"
+	echo -e "Number of sites filtered based on maximum mean depth\n" $NUMFIL "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+	
+	#filtering sites base on within locus depth mismatch
+	vcftools --vcf $prefix.fil.vcf --remove-filtered NP --recode-INFO-all --out $prefix.FIL1 --max-meanDP $PP --exclude-positions remove_depth_qual.txt --recode --site-depth > /dev/null
+	mawk '!/CHR/' $prefix.FIL1.ldepth | mawk '{
+	if (NR == 1) {chrom=$1;i=1;pos[i]=$2;dp[i]=$3}
+	else if ($1 == chrom) {i++;pos[i]=$2;dp[i]=$3}
+	else if ($1 != chrom) {for (x in dp) dpp= dpp + dp[x]; adp=dpp / i; adp= adp / 10 * 6; for (j = 1; j <= i; j++) if (dp[j] < adp) print chrom"\t"pos[j];chrom=$1;i=1;delete pos;pos[i]=$2;delete dp;dpp=0;dp[i]=$3}
+	}' > $prefix.dpmismatch.loci
+
+	OLD=$(mawk '!/#/' $prefix.FIL1.recode.vcf | wc -l)
+	DPMM=$(cat $prefix.dpmismatch.loci | wc -l)
+	echo -e "Number of sites filtered based on within locus depth mismatch\n" $DPMM "of" $OLD "\n"
+	echo -e "Number of sites filtered based on within locus depth mismatch\n" $DPMM "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+
+	cat remove_depth_qual.txt $prefix.dpmismatch.loci > remove_combined.txt
+	
+	#Combines all filters to create a final filtered VCF file
+	vcftools --vcf $prefix.FIL1.recode.vcf --exclude-positions remove_combined.txt --recode --recode-INFO-all --out $prefix.FIL > /dev/null
+
+	OLD=$(mawk '!/#/' $prefix.recode.vcf | wc -l)
+	FILTERED=$(mawk '!/#/' $prefix.FIL.recode.vcf  | wc -l)
+	NUMFIL=$(($OLD - $FILTERED))
+
+	echo -e "Total number of sites filtered after filtering by missing data etc.\n" $NUMFIL "of" $OLD "\n"
+	echo -e "Total number of sites filtered after filtering by missing data etc.\n" $NUMFIL "of" $OLD "\n" >> "$prefix"_filter_TRS_log.txt
+
+	echo -e "Remaining sites\n" $FILTERED "\n"
+	echo -e "Remaining sites\n" $FILTERED "\n" >> "$prefix"_filter_TRS_log.txt
+
+
+fi
+######
+
+
+echo -e "Filtered VCF file is called "$prefix".FIL.recode.vcf\n"
+echo "Filter stats stored in "$prefix"_filter_TRS_log.txt"
+
+rm $prefix.fil.vcf*
+rm $prefix.ab.vcf
+rm $prefix.filAB.vcf
+rm $prefix.FILA.*
+rm $prefix.FIL1.*
+rm $prefix.DEPTH
+rm $prefix.loci.qual
+rm $prefix.lowQDloci
+rm $prefix.ldepth
+rm $prefix.FIL1.ldepth
+rm $prefix.site.depth
+rm $prefix.dpmismatch.loci
+rm remove_depth_contigs.txt
+rm remove_depth_contigs_positions.txt
+rm remove_depth_qual.txt
+rm remove_combined.txt
+#rm meandepthpersite
+rm meandepthpersiteint
+
+
+exit
