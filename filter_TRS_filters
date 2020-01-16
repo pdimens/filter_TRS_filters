@@ -1,4 +1,4 @@
-#!/bin/bash
+#! /usr/bin/env bash
 
 echo -e "\nThis script will process a raw vcf file, usually 'TotalRawSNPs.vcf' from dDocent,"
 echo "filter by specified quality cutoff, depth cutoff, and invariance, and then iteratively"
@@ -62,11 +62,11 @@ echo "Now filtering individuals and loci by missing data"
 if [ "$genoint" -ge 10 ]
 	then
 	echo "Now filtering loci by missing data" >> "$prefix"_filter_TRS_log.txt
-	vcftools --recode-INFO-all --vcf filterMQDP.recode.vcf --geno 0.1  --maf 0.000001 --recode --out filterGN1 > filter_log.txt
+	vcftools --recode-INFO-all --vcf filterMQDP.recode.vcf --max-missing 0.1  --maf 0.000001 --recode --out filterGN1 > filter_log.txt
 	grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 else
 	echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
-	vcftools --recode-INFO-all --vcf filterMQDP.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix > filter_log.txt
+	vcftools --recode-INFO-all --vcf filterMQDP.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out $prefix > filter_log.txt
 	grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 	rm filter_log.txt
 	rm filterMQDP.*
@@ -79,18 +79,18 @@ then
 	if [ "$mindint" -gt 5 ]
 	then
 		echo "Now filtering individuals and loci by missing data" >> "$prefix"_filter_TRS_log.txt
-		vcftools --recode-INFO-all --vcf filterGN1.recode.vcf --mind 0.05 --geno 0.3  --maf 0.000001 --recode --out filterMND05GN3 > filter_log.txt
+		vcftools --recode-INFO-all --vcf filterGN1.recode.vcf --mind 0.05 --max-missing 0.3  --maf 0.000001 --recode --out filterMND05GN3 > filter_log.txt
 		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 	else
 		echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
-		vcftools --recode-INFO-all --vcf filterGN1.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
-		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+		vcftools --recode-INFO-all --vcf filterGN1.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
 		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 	fi
 else
 	echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
-	vcftools --recode-INFO-all --vcf filterGN1.recode.vcf --mind $mind  --maf 0.000001 --geno $geno --recode --out temp > filter_log.txt
-	vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind  --maf 0.000001 --geno $geno --recode --out $prefix >> filter_log.txt
+	vcftools --recode-INFO-all --vcf filterGN1.recode.vcf --mind $mind  --maf 0.000001 --max-missing $geno --recode --out temp > filter_log.txt
+	vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind  --maf 0.000001 --max-missing $geno --recode --out $prefix >> filter_log.txt
 	grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 	rm temp.recode.vcf
 	rm filter_log.txt
@@ -105,12 +105,12 @@ then
 	if [ "$mindint" -ge 30 ]
 	then
 		echo "Now filtering individuals and loci by missing data" >> "$prefix"_filter_TRS_log.txt
-		vcftools --recode-INFO-all --vcf filterMND05GN3.recode.vcf --mind 0.3 --geno 0.5  --maf 0.000001 --recode --out filterMND3GN5 > filter_log.txt
+		vcftools --recode-INFO-all --vcf filterMND05GN3.recode.vcf --mind 0.3 --max-missing 0.5  --maf 0.000001 --recode --out filterMND3GN5 > filter_log.txt
 		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 	else
 		echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
-		vcftools --recode-INFO-all --vcf filterMND05GN3.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
-		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+		vcftools --recode-INFO-all --vcf filterMND05GN3.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
 		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 		rm temp.*
 		rm filter_log.txt
@@ -120,8 +120,8 @@ then
 	fi
 else
 	echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
-	vcftools --recode-INFO-all --vcf filterMND05GN3.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
-	vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+	vcftools --recode-INFO-all --vcf filterMND05GN3.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+	vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
 	grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 	rm temp.*
 	rm filter_log.txt
@@ -137,10 +137,10 @@ then
 	if [ "$mindint" -ge 50 ]
 	then
 		echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
-		vcftools --recode-INFO-all --vcf filterMND3GN5.recode.vcf --mind 0.5 --geno 0.7  --maf 0.000001 --recode --out filterMND5GN7 > filter_log.txt
+		vcftools --recode-INFO-all --vcf filterMND3GN5.recode.vcf --mind 0.5 --max-missing 0.7  --maf 0.000001 --recode --out filterMND5GN7 > filter_log.txt
 		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
-		vcftools --recode-INFO-all --vcf filterMND5GN7.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
-		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+		vcftools --recode-INFO-all --vcf filterMND5GN7.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
 		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 		rm temp.*
 		rm filter_log.txt
@@ -152,8 +152,8 @@ then
 		exit
 	else
 		echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
-		vcftools --recode-INFO-all --vcf filterMND3GN5.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
-		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+		vcftools --recode-INFO-all --vcf filterMND3GN5.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+		vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
 		grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 		rm temp.*
 		rm filter_log.txt
@@ -164,8 +164,8 @@ then
 	fi
 else
 	echo "Now filtering individuals and loci by missing data, then exiting" >> "$prefix"_filter_TRS_log.txt
-	vcftools --recode-INFO-all --vcf filterMND3GN5.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out temp > filter_log.txt
-	vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --geno $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
+	vcftools --recode-INFO-all --vcf filterMND3GN5.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out temp > filter_log.txt
+	vcftools --recode-INFO-all --vcf temp.recode.vcf --mind $mind --max-missing $geno  --maf 0.000001 --recode --out $prefix >> filter_log.txt
 	grep "iltering" filter_log.txt >> "$prefix"_filter_TRS_log.txt
 	rm temp.*
 	rm filter_log.txt
